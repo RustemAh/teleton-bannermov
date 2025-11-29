@@ -1,0 +1,245 @@
+<!DOCTYPE html>  
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banner Teletón + Cómputo</title>
+
+<style>
+  body, html {
+    margin:0;
+    padding:0;
+    font-family: Arial, sans-serif;
+    background:#000; /* opcional, para ver el contorno */
+  }
+
+  .banner-container {
+    width:400px;
+    height:700px;
+    margin:auto;
+    position:relative;
+    overflow:hidden;
+  }
+
+  .banner-img {
+    width:400px;
+    height:700px;
+    display:block;
+  }
+
+  /* VIDEO sobre el banner en formato vertical */
+  .banner-video {
+    position:absolute;
+    top:400px;       /* distancia desde arriba */
+    left:20px;      /* centrado con margen lateral */
+    width:360px;    /* 400 - 2*20 */
+    height:203px;   /* aprox 16:9 para 360px (360*9/16=202.5) */
+    border:0;
+    display:block;
+  }
+
+  /* Caja de cómputo debajo del video, centrada */
+  .countdown-box {
+    position:absolute;
+    top:100px;       /* debajo del video */
+    left:20px;
+    width:360px;
+    background:#ffffffd9;
+    padding:16px 6px;
+    border-radius:10px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.15);
+  }
+
+  .label {
+    font-size:14px;
+    font-weight:600;
+    color:#333;
+  }
+
+  .cover-amount {
+    font-size:24px;
+    font-weight:800;
+    color:#E5252A;
+    line-height:1.1;
+  }
+
+  .meta {
+    font-size:16px;
+    font-weight:700;
+    color:#000;
+    margin-top:2px;
+  }
+
+  /* Barra de progreso */
+  .progress-wrap {
+    margin-top:8px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+
+  .progress-rail {
+    width:100%;
+    height:8px;
+    background:#e5e7eb;
+    border-radius:999px;
+    overflow:hidden;
+  }
+
+  .progress-fill {
+    height:100%;
+    width:0%;
+    background:#22c55e; /* verde avance */
+    border-radius:999px;
+    transition:width 0.4s ease-out;
+  }
+
+  .progress-text {
+    font-size:12px;
+    color:#374151;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="banner-container">
+
+  <!-- Imagen del banner (vertical 400x800) -->
+  <img class="banner-img"
+       src="https://www.epicentrochile.com/wp-content/uploads/2025/11/banner-especial_teleton2025_mov400x700-1.png"
+       alt="Banner Teletón">
+
+  <!-- VIDEO integrado sobre el banner -->
+  <iframe
+    class="banner-video"
+    src="https://www.youtube.com/embed/w7JQvOZTfkw?autoplay=1&mute=1"
+    title="Teletón en vivo"
+    allow="autoplay; encrypted-media; fullscreen"
+    allowfullscreen>
+  </iframe>
+
+  <!-- CÓMPUTO + META + PROGRESO -->
+  <div class="countdown-box">
+    <div class="label">Cómputo:</div>
+    <div class="cover-amount" id="amount">$0</div>
+
+    <div class="label">Meta:</div>
+    <div class="meta">$40.502.617.946</div>
+
+    <div class="progress-wrap">
+      <div class="progress-rail">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">
+        0% de la meta · Faltan $40.502.617.946
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // URL de la hoja PUBLICADA como CSV
+  const DATA_URL = "https://docs.google.com/spreadsheets/d/1iAa0X0ysxr2jHZvV5JKUE5TPiamu-sFAWV9qsb-dpj4/export?format=csv&gid=0";
+  const META = 40502617946; // 40.502.617.946
+
+  let currentAmount = 0;
+
+  function parseAmount(raw) {
+    if (!raw) return 0;
+    const digits = String(raw).replace(/[^\d]/g, "");
+    return digits ? Number(digits) : 0;
+  }
+
+  async function fetchAmount() {
+    const url = DATA_URL + (DATA_URL.includes("?") ? "&" : "?") + "t=" + Date.now();
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return 0;
+
+    const text = await res.text();
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) return 0;
+
+    // Tomamos siempre A2 (primera fila de datos, primera columna)
+    const firstDataLine = lines[1];
+    const cols = firstDataLine.split(",");
+    const rawAmount = cols[0];
+    return parseAmount(rawAmount);
+  }
+
+  function updateProgress(amount) {
+    const fill = document.getElementById("progressFill");
+    const text = document.getElementById("progressText");
+    if (!fill || !text) return;
+
+    const pctRaw = META > 0 ? (amount / META) * 100 : 0;
+    const pct = Math.max(0, Math.min(100, pctRaw));
+    fill.style.width = pct.toFixed(1) + "%";
+
+    const diff = META - amount;
+    if (diff > 0) {
+      text.textContent =
+        pct.toFixed(1) + "% de la meta · Faltan $" + diff.toLocaleString("es-CL");
+    } else {
+      text.textContent =
+        "¡Meta superada! (" + pct.toFixed(1) + "%)";
+    }
+  }
+
+  function animateAmount(from, to, durationMs) {
+    const el = document.getElementById("amount");
+    if (!el) return;
+
+    const start = performance.now();
+    const diff = to - from;
+
+    function frame(now) {
+      const t = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const value = Math.round(from + diff * eased);
+
+      el.textContent = "$" + value.toLocaleString("es-CL");
+      updateProgress(value); // la barra sigue la animación
+
+      if (t < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        currentAmount = to;
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  async function updateAmount() {
+    try {
+      const amount = await fetchAmount();
+      if (!Number.isFinite(amount)) return;
+
+      const el = document.getElementById("amount");
+      if (!el) return;
+
+      if (currentAmount === 0) {
+        // Primera vez: fijar directo
+        currentAmount = amount;
+        el.textContent = "$" + amount.toLocaleString("es-CL");
+        updateProgress(amount);
+      } else if (amount !== currentAmount) {
+        // Solo animar cuando cambia
+        animateAmount(currentAmount, amount, 1000);
+      }
+    } catch (e) {
+      console.error("Error al actualizar cómputo:", e);
+    }
+  }
+
+  updateAmount();
+  setInterval(updateAmount, 60000);
+</script>
+
+</body>
+</html>
